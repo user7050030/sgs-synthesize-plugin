@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>综合插件整合 · 使用说明</title>
+<style>
+  :root{
+    --bg:#f5f6fb;
+    --card:#ffffff;
+    --ink:#1f2430;
+    --muted:#6b7280;
+    --line:#e5e7ef;
+    --accent:#5b6ef5;
+    --accent-soft:#eef0ff;
+    --note:#3b82f6;
+    --warn:#f59e0b;
+    --danger:#e5484d;
+    --ok:#10b981;
+    --radius:14px;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html{ scroll-behavior:smooth; }
+
+  body{
+    margin:0;
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    color:var(--ink);
+    line-height:1.78;
+    background:
+      radial-gradient(1200px 600px at 50% -220px, #e6e8ff 0%, transparent 62%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  a{ color:var(--accent); }
+
+  code{
+    background:var(--accent-soft);
+    color:#4b56c9;
+    padding:1px 6px;
+    border-radius:6px;
+    font-size:.92em;
+    font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:60;
+    background:rgba(255,255,255,.8);
+    -webkit-backdrop-filter:blur(14px);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar-inner{
+    max-width:960px; margin:0 auto; padding:9px 20px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  }
+  .brand{
+    font-weight:800; letter-spacing:.3px; font-size:15px;
+    background:linear-gradient(120deg,#5b6ef5,#a855f7);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    white-space:nowrap;
+  }
+  .toc{
+    margin-left:auto; display:flex; gap:2px; flex-wrap:wrap;
+  }
+  .toc a{
+    font-size:13px; color:var(--muted); text-decoration:none;
+    padding:6px 11px; border-radius:999px; transition:.18s;
+    white-space:nowrap;
+  }
+  .toc a:hover{ background:var(--accent-soft); color:var(--accent); }
+  .toc a.active{ background:var(--accent-soft); color:var(--accent); font-weight:600; }
+
+  /* ---------- 主体 ---------- */
+  main{
+    max-width:960px; margin:0 auto; padding:44px 20px 90px;
+  }
+
+  section{ scroll-margin-top:84px; }
+
+  h1{
+    font-size:clamp(26px, 5vw, 36px);
+    margin:0 0 6px; letter-spacing:-.6px; line-height:1.3;
+  }
+  h2{
+    font-size:21px; margin:44px 0 14px; letter-spacing:-.3px;
+    display:flex; align-items:center; gap:10px;
+  }
+  h2::before{
+    content:""; width:5px; height:20px; border-radius:3px;
+    background:linear-gradient(180deg,#5b6ef5,#a855f7);
+    flex:none;
+  }
+  h3{
+    font-size:16.5px; margin:26px 0 10px;
+    display:flex; align-items:center; gap:9px;
+  }
+
+  .lead{ color:var(--muted); margin:0 0 8px; font-size:15px; }
+
+  /* ---------- 提示块 ---------- */
+  .callout{
+    position:relative;
+    border-radius:12px;
+    padding:14px 18px 14px 20px;
+    margin:18px 0;
+    font-size:15px;
+    border:1px solid transparent;
+    border-left:4px solid var(--note);
+    background:#eff6ff;
+  }
+  .callout .tag{
+    display:inline-block;
+    font-size:11px; font-weight:800; letter-spacing:1.2px;
+    color:var(--note);
+    margin-bottom:2px;
+  }
+  .callout p{ margin:4px 0; }
+  .callout.note{ border-left-color:var(--note); background:#eff6ff; }
+  .callout.note .tag{ color:var(--note); }
+
+  .callout.warn{ border-left-color:var(--warn); background:#fffbeb; }
+  .callout.warn .tag{ color:#b45309; }
+
+  .callout.tip{ border-left-color:var(--ok); background:#f0fdf7; }
+  .callout.tip .tag{ color:#047857; }
+
+  .callout.danger{ border-left-color:var(--danger); background:#fff5f5; }
+  .callout.danger .tag{ color:var(--danger); }
+
+  /* ---------- 卡片 ---------- */
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px 24px;
+    margin:16px 0;
+    box-shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 28px -20px rgba(16,24,40,.22);
+  }
+  .card > :first-child{ margin-top:0; }
+  .card > :last-child{ margin-bottom:0; }
+
+  /* ---------- 功能列表 ---------- */
+  .features{
+    list-style:none; margin:0; padding:0;
+    display:grid; gap:12px;
+  }
+  .features li{
+    position:relative;
+    padding:14px 18px 14px 46px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,#fcfcff,#f6f7ff);
+  }
+  .features li::before{
+    content:"";
+    position:absolute; left:20px; top:23px;
+    width:8px; height:8px; border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 0 4px var(--accent-soft);
+  }
+  .features li b{ display:block; margin-bottom:1px; font-size:15.5px; }
+  .features li span{ color:var(--muted); font-size:14.5px; }
+
+  /* ---------- 普通列表 ---------- */
+  .plain{ margin:0; padding-left:1.2em; }
+  .plain li{ margin:8px 0; color:#3a4150; }
+  .plain li b{ color:var(--ink); }
+
+  /* ---------- 两种形态 ---------- */
+  .modes{
+    display:grid; gap:14px;
+    grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+  }
+  .mode{
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px;
+    background:linear-gradient(180deg,#fcfcff,#f6f7ff);
+  }
+  .mode h4{ margin:0 0 6px; font-size:15.5px; }
+  .mode p{ margin:0; color:var(--muted); font-size:14.5px; }
+
+  /* ---------- 安装步骤 ---------- */
+  .steps{ counter-reset:step; list-style:none; margin:0; padding:0; display:grid; gap:14px; }
+  .steps > li{
+    counter-increment:step;
+    position:relative;
+    padding-left:42px;
+  }
+  .steps > li::before{
+    content:counter(step);
+    position:absolute; left:0; top:2px;
+    width:26px; height:26px; border-radius:50%;
+    display:grid; place-items:center;
+    font-size:13px; font-weight:800; color:#fff;
+    background:linear-gradient(135deg,#5b6ef5,#8b5cf6);
+    box-shadow:0 4px 12px -4px rgba(91,110,245,.7);
+  }
+  .steps b{ font-size:15.5px; }
+
+  .shots{
+    display:flex; flex-wrap:wrap; gap:12px;
+    margin:12px 0 6px;
+  }
+  .shot{ margin:0; }
+  .shot img{
+    display:block;
+    width:300px; max-width:100%; height:auto;
+    min-height:110px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:
+      repeating-linear-gradient(45deg,#f3f4fa,#f3f4fa 10px,#eceef7 10px,#eceef7 20px);
+    object-fit:cover;
+  }
+  .shot figcaption{
+    margin-top:6px; font-size:13px; color:var(--muted);
+    max-width:300px;
+  }
+
+  /* ---------- 免责声明 ---------- */
+  .disclaimer{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:8px 24px 22px;
+    margin:18px 0;
+    box-shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 28px -20px rgba(16,24,40,.22);
+  }
+  .disclaimer h3{
+    margin:24px 0 8px;
+    font-size:15.5px;
+    padding-bottom:8px;
+    border-bottom:1px dashed var(--line);
+  }
+  .disclaimer h3 .num{
+    display:inline-grid; place-items:center;
+    width:24px; height:24px; flex:none;
+    border-radius:8px;
+    font-size:12.5px; font-weight:800;
+    color:#fff;
+    background:linear-gradient(135deg,#f59e0b,#ef4444);
+  }
+  .disclaimer p{ margin:9px 0; font-size:14.5px; color:#3a4150; }
+  .disclaimer strong{ color:var(--ink); }
+
+  /* ---------- 回到顶部 ---------- */
+  .to-top{
+    position:fixed; right:22px; bottom:22px; z-index:70;
+    width:46px; height:46px; border-radius:50%;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--accent);
+    font-size:18px;
+    cursor:pointer;
+    display:grid; place-items:center;
+    box-shadow:0 10px 28px -12px rgba(16,24,40,.4);
+    opacity:0; transform:translateY(12px) scale(.9);
+    pointer-events:none;
+    transition:.25s;
+  }
+  .to-top.show{ opacity:1; transform:none; pointer-events:auto; }
+  .to-top:hover{ background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  /* ---------- 页脚 ---------- */
+  footer{
+    text-align:center;
+    padding:30px 20px 50px;
+    color:var(--muted);
+    font-size:13.5px;
+    border-top:1px solid var(--line);
+  }
+  footer a{ color:var(--muted); text-decoration:none; border-bottom:1px dotted #c9ccd8; }
+  footer a:hover{ color:var(--accent); }
+
+  /* ---------- 移动端 ---------- */
+  @media (max-width:640px){
+    main{ padding:28px 16px 70px; }
+    .card, .disclaimer{ padding-left:16px; padding-right:16px; }
+    .topbar-inner{ padding:8px 14px; }
+    .toc{ width:100%; margin-left:0; overflow-x:auto; padding-bottom:4px; }
+    .to-top{ right:14px; bottom:14px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= 顶栏 ================= -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="brand">综合插件整合</span>
+    <nav class="toc">
+      <a href="#anchor_head">概览</a>
+      <a href="#features">功能</a>
+      <a href="#impl">实现</a>
+      <a href="#anchor_use">使用</a>
+      <a href="#anchor_tutorial">安装</a>
+      <a href="#anchor_remind">提醒</a>
+    </nav>
+  </div>
+</div>
+
+<main id="anchor_head">
+
+  <h1>综合插件整合</h1>
+  <p class="lead">设置展示搜索 · 去红点 · 锦囊袋圆点 · 牌局屏蔽 · <code>/sound</code> 台词搜索，一个页签全搞定。</p>
+
+  <!-- NOTE -->
+  <div class="callout note">
+    <span class="tag">NOTE</span>
+    <p>(๑•̀ㅂ•́)و✧ 把设置展示搜索、去红点、锦囊袋圆点、牌局屏蔽和 <code>/sound</code> 台词搜索打包进一个页签。<strong>所有功能默认关闭</strong>，想用哪个自己开。٩(ˊᗜˋ*)></p>
+  </div>
+
+  <!-- WARNING -->
+  <div class="callout warn">
+    <span class="tag">WARNING</span>
+    <p><strong>插件可选支持：</strong><a href="https://github.com/Clarrycy/jinnangmiaoji" target="_blank" rel="noopener">锦囊妙计锦囊袋</a></p>
+    <p>使用前先看最后面的 <a href="#anchor_remind"><strong>小提醒 · ⚓</strong></a>（<strong>特别是 WARNING</strong>）</p>
+  </div>
+
+  <p><a href="#anchor_use"><strong>点击直接看使用教程 · 👈</strong></a></p>
+
+  <!-- ================= 功能列表 ================= -->
+  <section id="features">
+    <h2>功能列表</h2>
+
+    <ul class="features">
+      <li>
+        <b>设置展示搜索</b>
+        <span>在「设置展示」窗口标题栏加搜索框，支持武将名、皮肤名、拼音连写，例如 <code>陆抗lukang</code>。</span>
+      </li>
+      <li>
+        <b>立即去红点 / 新标</b>
+        <span>新弹出的界面基本下一帧就干净；<strong>皮肤、武将界面的「新」会保留</strong>。</span>
+      </li>
+      <li>
+        <b>锦囊袋圆点入口</b>
+        <span>收起态只留一个 26px 圆点，点它仍然能正常展开锦囊袋，左右停靠都支持。</span>
+      </li>
+      <li>
+        <b>屏蔽对手发言</b>
+        <span>牌局中不再显示其他玩家的普通聊天、快捷短语和表情。</span>
+      </li>
+      <li>
+        <b>屏蔽其他人皮肤特效</b>
+        <span>其他座位的出框特效、技能皮肤特效、入场 / 登场特效都会被拦掉。</span>
+      </li>
+      <li>
+        <b>屏蔽其他人武将台词</b>
+        <span>其他玩家的技能语音、死亡语音、入场语音和武将台词快捷短语都会被拦掉。</span>
+      </li>
+      <li>
+        <b><code>/sound</code> 台词搜索</b>
+        <span>按台词内容或武将名搜索，武将名匹配的结果排在最前；结果右侧带<strong>对应皮肤头像</strong>；显示条数可输入，外面面板默认 10 条、<code>/sound</code> 弹窗默认 50 条。大厅里点击 = 试听，牌局里点击 = 发送；牌局聊天框输入 <code>/sound</code> 也能呼出搜索窗。</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ================= 代码实现 ================= -->
+  <section id="impl">
+    <h2>代码实现</h2>
+
+    <div class="card">
+      <ul class="plain">
+        <li><b>搜索框：</b>包住「设置展示」皮肤 / 武将视图的 <code>UpdatePanel</code>，在 <code>DataProvider</code> 上按关键词过滤。</li>
+        <li><b>去红点：</b>监视舞台节点和新增子节点，红点 /「新」纹理直接换透明图；皮肤、武将相关窗口跳过「新」纹理。</li>
+        <li><b>圆点入口：</b>收起时把原胶囊透明化并摘掉命中区，只留 26px 圆点接管点击，展开 / 收起仍走锦囊袋原生逻辑。</li>
+        <li><b>屏蔽聊天：</b>在 <code>ChatManager</code> 解析消息前按「非自己 + 消息类型」拦掉牌局聊天。</li>
+        <li><b>屏蔽皮肤特效：</b>游戏类原型是<strong>不可扩展对象</strong>，使用 <code>WeakMap</code> 存补丁状态；同时替换 <code>_events</code> 里已绑定的 <code>method</code>（单个对象或数组都处理），覆盖动态皮肤、技能皮肤、入场、登场、皮肤套装等入口。</li>
+        <li><b>屏蔽台词：</b>直接拦 <code>PlayerSeat</code> 的技能语音、技能资源语音、死亡语音，再对入场 / 登场等 UI 方法做语音静音；锦囊袋自己的「听他人台词」也同步关闭。</li>
+        <li><b><code>/sound</code>：</b>有锦囊袋目录时解压本地皮肤目录，建约 3 万条台词索引；没有目录时用游戏里当前武将的快捷台词。每条台词预先算好小写检索字段并缓存最近查询，搜索按「武将名 &gt; 皮肤 / 技能 &gt; 台词文本」加权排序；头像优先用台词所属皮肤资源，再回退到武将头像 / 默认皮肤；局内发送语音必要支持 <a href="https://github.com/Clarrycy/jinnangmiaoji" target="_blank" rel="noopener">锦囊妙计锦囊袋 | 语音发送插件</a>。ヽ(•̀ω•́ )ゝ</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= 面板的两种形态 ================= -->
+  <section id="anchor_use">
+    <h2>面板的两种形态</h2>
+    <p class="lead">在「综合」页签的「面板设置」里可以切换：</p>
+
+    <div class="modes">
+      <div class="mode">
+        <h4>并入锦囊袋</h4>
+        <p>左侧列表里出现一个椭圆图标「综合」，位置在「插件」和「频道」之间。</p>
+      </div>
+      <div class="mode">
+        <h4>独立面板</h4>
+        <p>锦囊袋里不再出现综合页签，屏幕左侧出现一个和锦囊袋圆点同尺寸的<strong>白色小圆点</strong>，点它展开 / 收起独立面板。</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <span class="tag">TIP</span>
+      <p>独立面板的标题栏和白色圆点都可以拖动，位置会记住。</p>
+      <p>还可以设置<strong>展开 / 关闭快捷键</strong>，默认没有。点快捷键按钮后按下组合键即可，例如 <code>Ctrl+Shift+K</code>；<code>Esc</code> 取消，<code>Backspace</code> 清除。</p>
+    </div>
+
+    <h2>如何配置</h2>
+
+    <div class="callout note">
+      <span class="tag">NOTE</span>
+      <p>游戏里 <strong>个人信息 → 换展示 → 标题栏右侧搜索框</strong>；点 <code>×</code> 清空。</p>
+    </div>
+
+    <h3>怎么安装与配置（默认已拥有插件）</h3>
+
+    <ol class="steps">
+      <li>
+        <b>方式一：Tampermonkey（篡改猴）</b>
+        <p style="margin:4px 0 0;color:var(--muted);font-size:14.5px;">
+          下载 <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Tampermonkey</a> 并确保其可用（浏览器插件设置打开「允许运行用户脚本」）。
+        </p>
+
+        <div class="shots">
+          <figure class="shot">
+            <img src="img/step_1-2.png" alt="step_1-2" loading="lazy">
+            <figcaption>1.1 &nbsp;1. 点击插件 → 2. 点击篡改猴</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="img/step_3.png" alt="step_3" loading="lazy">
+            <figcaption>1.2 &nbsp;3. 添加新脚本</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="img/step_4.png" alt="step_4" loading="lazy">
+            <figcaption>1.3 &nbsp;4. 将 js 拖入篡改猴</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="img/step_5.png" alt="step_5" loading="lazy">
+            <figcaption>1.4 &nbsp;点击安装就完成了 · ✔️</figcaption>
+          </figure>
+        </div>
+      </li>
+
+      <li id="anchor_tutorial">
+        <b>方式二：锦囊妙计微端安装</b>
+        <p style="margin:4px 0 0;color:var(--muted);font-size:14.5px;">
+          下载 <a href="https://github.com/Clarrycy/jinnangmiaoji" target="_blank" rel="noopener">锦囊妙计客户端</a> 进行配置。
+        </p>
+
+        <div class="shots">
+          <figure class="shot">
+            <img src="img/jinnangmiaoji_step_1-2.png" alt="jinnangmiaoji_step_1-2" loading="lazy">
+            <figcaption>2.1 &nbsp;1. 点击 ≡（抽屉）→ 2. 更新</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="img/jinnangmiaoji_step_4-5.png" alt="jinnangmiaoji_step_4-5" loading="lazy">
+            <figcaption>2.2 &nbsp;3. 点击安装插件 → 4. 载入 JS 就好啦 (p≧w≦q)</figcaption>
+          </figure>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ================= 小提醒 ================= -->
+  <section id="anchor_remind">
+    <h2>小提醒 ⚓</h2>
+
+    <div class="callout tip">
+      <span class="tag">TIP</span>
+      <p>基于该项目上进行了自主开发及调试，可能使用此开源项目的部分代码。（<a href="https://github.com/Clarrycy/jinnangmiaoji" target="_blank" rel="noopener">锦囊妙计客户端</a>）&nbsp;(´･ω･`)</p>
+    </div>
+
+    <div class="disclaimer">
+      <h3><span class="num">一</span>非官方声明</h3>
+      <p>本插件由个人独立开发，与任何游戏官方、发行商、平台运营方无关联、无授权、无合作关系，不代表游戏官方立场，也未获得游戏官方的认可或背书。游戏中涉及的商标、版权及其他知识产权均归其各自权利人所有。</p>
+
+      <h3><span class="num">二</span>开源许可证与合规声明</h3>
+      <p>本插件在开发中使用了原项目的代码 / 资源，相关开源代码的著作权归原项目作者及其贡献者所有。</p>
+      <p>如原项目许可证要求分发源码、相同方式共享、保留声明或提供修改说明，开发者应遵守相应义务。用户在使用本插件时，也应遵守原项目许可证及本插件许可证的约束。</p>
+      <p>若本免责声明与原项目开源许可证存在冲突，就原项目代码部分而言，以原项目许可证为准。本声明不构成对原项目许可证的修改或替代。</p>
+
+      <h3><span class="num">三</span>使用风险自担</h3>
+      <p>用户在使用本插件前，应自行了解所使用游戏平台的用户协议、插件政策及相关规定。是否使用本插件由用户自行判断并承担全部风险。</p>
+      <p>因使用本插件可能导致的账号封禁、限制、数据丢失、虚拟财产损失、设备异常等后果，由用户自行承担，开发者不承担任何责任。</p>
+      <p>本插件可能因游戏版本更新、平台政策调整、原项目停止维护等原因出现功能失效、兼容性问题或运行异常，开发者不保证插件的持续可用性、安全性或无错误运行。</p>
+
+      <h3><span class="num">四</span>免责条款</h3>
+      <p>在法律允许的最大范围内，开发者及原项目作者、贡献者均不对本插件作出任何明示或默示担保，包括但不限于适销性、特定用途适用性、不侵权及无错误的保证。因使用或无法使用本插件而产生的任何直接、间接、附带、特殊或后果性损失，开发者及原项目作者、贡献者均不承担赔偿责任。</p>
+
+      <h3><span class="num">五</span>知识产权与使用限制</h3>
+      <p>本插件中由开发者原创部分的著作权归开发者所有；原项目代码及资源的知识产权归其各自权利人所有。</p>
+      <p>未经相应权利人许可，禁止对本插件进行反编译、逆向工程、恶意修改、二次分发或用于商业用途，但开源许可证明确允许的除外。</p>
+      <p>用户不得利用本插件从事违反法律法规、侵犯他人权益、破坏游戏公平性或违反游戏平台规则的行为。</p>
+
+      <h3><span class="num">六</span>第三方内容</h3>
+      <p>本插件可能包含或调用第三方组件、库或服务，相关权利和责任由该第三方按其许可证或服务条款承担。开发者不对第三方内容的合法性、安全性作超出法律规定的保证。</p>
+
+      <h3><span class="num">七</span>条款变更与解释</h3>
+      <p>开发者保留随时修改本免责声明及插件功能的权力，修改后的条款自公布之日起生效。用户继续使用即视为接受变更后的条款。本声明由开发者负责解释，但不得违反适用法律及原项目开源许可证的强制性要求。</p>
+
+      <h3><span class="num">八</span>法律适用</h3>
+      <p>本声明适用 [国家 / 地区] 法律。因本声明引起的争议，双方应友好协商解决；协商不成的，提交 [管辖地] 有管辖权的机构处理。</p>
+
+      <h3><span class="num">九</span>AI 声明</h3>
+      <p>项目使用人工智能辅助生成部分代码以及验证，包括但不限于部分 <code>README.md</code> 的文字、代码主体……</p>
+
+      <div class="callout danger" style="margin-top:24px;">
+        <span class="tag">WARNING</span>
+        <p><strong>使用本插件即表示您已阅读、理解并同意上述全部条款。如不同意，请立即停止使用并删除本插件。</strong></p>
+      </div>
+
+      <p style="text-align:center;margin-top:22px;">
+        <a href="#anchor_head" style="display:inline-block;padding:11px 34px;border:1px solid #d8dbe8;border-radius:10px;background:#fff;text-decoration:none;color:var(--ink);font-weight:600;box-shadow:0 2px 8px -4px rgba(16,24,40,.25);">知道了</a>
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <a href="https://github.com/user7050030" target="_blank" rel="noopener">© Tihaon7050030</a>
+</footer>
+
+<button class="to-top" aria-label="回到顶部">↑</button>
+
+<script>
+  /* 目录高亮 */
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    var map = {};
+    links.forEach(function (a) {
+      map[a.getAttribute('href').slice(1)] = a;
+    });
+
+    var sections = Array.prototype.slice.call(
+      document.querySelectorAll('section[id], main[id]')
+    ).filter(function (s) { return map[s.id]; });
+
+    if (!('IntersectionObserver' in window) || !sections.length) return;
+
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        links.forEach(function (l) { l.classList.remove('active'); });
+        var a = map[entry.target.id];
+        if (a) a.classList.add('active');
+      });
+    }, { rootMargin: '-80px 0px -70% 0px', threshold: 0 });
+
+    sections.forEach(function (s) { io.observe(s); });
+  })();
+
+  /* 回到顶部 */
+  (function () {
+    var btn = document.querySelector('.to-top');
+    function onScroll() {
+      btn.classList.toggle('show', window.scrollY > 500);
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    btn.addEventListener('click', function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    onScroll();
+  })();
+
+  /* 图片加载失败时保留占位块，避免布局塌陷 */
+  (function () {
+    document.querySelectorAll('.shot img').forEach(function (img) {
+      img.addEventListener('error', function () {
+        img.style.visibility = 'hidden';
+        img.parentElement.classList.add('img-missing');
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
