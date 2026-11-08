@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         三国杀·锦囊妙计综合插件
-// @namespace    https://github.com/Tihaon7050030/sgs-synthesize-plugin
-// @version      1.1.3
-// @description  设置展示搜索、立即去红点/新标、锦囊袋圆点入口、屏蔽对手发言/皮肤特效/武将台词，以及 /sound 台词搜索发送。
+// @name         三国杀·体验优化综合插件
+// @namespace    https://github.com/user7050030/sgs-synthesize-plugin
+// @version      1.1.4
+// @description  设置展示搜索、立即去红点/新标、锦囊袋圆点入口、屏蔽对手发言/皮肤特效/武将台词、/sound 台词搜索发送与快捷键截图。
 // @author       Tihaon7050030
 // @match        https://game.4399iw2.com/yxxsgs/*
 // @match        *://*.sanguosha.com/10/*
@@ -25,7 +25,7 @@
   if (window.__SGS_SYNTHESIZE__) return;
   window.__SGS_SYNTHESIZE__ = true;
 
-  const VERSION = '1.1.3';
+  const VERSION = '1.1.4';
   const AUTHOR = 'Tihaon7050030';
   const STORE_KEY = 'sgs-synthesize:settings:v2';
   const CSS_ID = 'sgs-syn-css';
@@ -51,10 +51,16 @@
     modalLimit: 50,
     dotPos: null,
     panelPos: null,
+    shotKey: '',
   };
+
+  const SEARCH_DEBOUNCE = 360;
+  const SEARCH_COOLDOWN = 420;
 
   const uiState = {
     capturingHotkey: false,
+    capturingShotKey: false,
+    captureKeys: new Set(),
     standaloneOpen: false,
   };
 
@@ -318,6 +324,11 @@
         background: transparent; color: #8f7b5b; font: 12px "Microsoft YaHei", sans-serif;
       }
       .sgs-syn-hotkey-clear:hover { color: #d8b979; border-color: rgba(214, 173, 78, .55); }
+      .sgs-syn-shot-info {
+        margin-top: 6px; color: #8f7b5b; line-height: 1.6; word-break: break-all;
+        font: 11px "Microsoft YaHei", sans-serif;
+      }
+      .sgs-syn-shot-info b { color: #c9ab74; font-weight: 600; }
 
       #${WHITE_DOT_ID} {
         position: fixed; left: 18px; bottom: 122px; z-index: 2147483400;
@@ -971,7 +982,7 @@
     const seen = new WeakSet();
     let found = null;
     const visit = (obj, depth) => {
-      if (found || !obj || typeof obj !== 'object' || depth > 6 || seen.has(obj)) return;
+      if (found || !obj || typeof obj !== 'object' || depth > 7 || seen.has(obj)) return;
       seen.add(obj);
       const cn = safe(() => obj.constructor && obj.constructor.name, '');
       if (cn === 'ChatManager' || (typeof obj.SendSkinChatPhrase === 'function' && typeof obj.SendChatMsg === 'function')) {
@@ -999,6 +1010,13 @@
     if (window.__SGS) roots.push(window.__SGS);
     if (window.Sgs) roots.push(window.Sgs);
     if (window.SGSMODULE) roots.push(window.SGSMODULE);
+    const J = window.__JND;
+    if (J) {
+      for (const key of ['_protocolManagerIds', 'MSGREC', '_protocolSubs', '_rawProtocolSubs', '_protocolBusHealth']) {
+        const value = safe(() => J[key], null);
+        if (value && typeof value === 'object') roots.push(value);
+      }
+    }
     for (const root of roots) {
       visit(root, 0);
       if (found) return found;
@@ -1041,10 +1059,7 @@
 
   function jinnangSoundAvailable() {
     const J = window.__JND;
-    if (!J || typeof J.sendOfficialSkinPhrase !== 'function') return false;
-    const plugin = safe(() => J.plugins && J.plugins.get && J.plugins.get('voice-phrases'), null);
-    if (plugin && plugin.state && plugin.state !== 'running') return false;
-    return true;
+    return !!(J && typeof J.sendOfficialSkinPhrase === 'function');
   }
 
   function isOtherChat(e) {
@@ -1492,6 +1507,21 @@
     return row;
   }
 
+  function scheduleSoundPrepare() {
+    const rows = sound.rows;
+    let index = 0;
+    const step = () => {
+      if (sound.rows !== rows) return;
+      const end = Math.min(rows.length, index + 2000);
+      for (; index < end; index++) {
+        const row = rows[index];
+        if (row && !row.hay) prepareSoundRow(row);
+      }
+      if (index < rows.length) setTimeout(step, 24);
+    };
+    setTimeout(step, 0);
+  }
+
   function buildSoundIndex(cat) {
     const rows = [];
     const seen = new Set();
@@ -1678,6 +1708,7 @@
         sound.loading = false;
         sound.promise = null;
         updateSoundStatus();
+        if (sound.loaded) scheduleSoundPrepare();
         refreshSoundContainers();
       }
       return sound.rows;
@@ -1741,9 +1772,13 @@
     }
     scored.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
-      const byGeneral = a.row.general.localeCompare(b.row.general, 'zh-Hans-CN');
-      if (byGeneral !== 0) return byGeneral;
-      return a.row.text.localeCompare(b.row.text, 'zh-Hans-CN');
+      const ga = a.row.general || '';
+      const gb = b.row.general || '';
+      if (ga !== gb) return ga < gb ? -1 : 1;
+      const ta = a.row.text || '';
+      const tb = b.row.text || '';
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      return 0;
     });
     const top = scored.slice(0, Math.min(200, scored.length)).map(item => item.row);
     sound.searchCache.set(raw, { rows: top, total: scored.length });
@@ -1849,6 +1884,308 @@
     }
   }
 
+  const DEFAULT_SHOT_SOUND = 'data:audio/mpeg;base64,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';
+  const shot = {
+    db: null,
+    soundBlob: null,
+    soundUrl: '',
+    soundName: '',
+    dirHandle: null,
+    dirName: '',
+    busy: false,
+    loaded: false,
+  };
+
+  function shotDb() {
+    if (shot.db) return Promise.resolve(shot.db);
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open('sgs-synthesize-media', 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains('files')) request.result.createObjectStore('files');
+      };
+      request.onsuccess = () => {
+        shot.db = request.result;
+        resolve(shot.db);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  function shotStore(mode, action) {
+    return shotDb().then(db => new Promise((resolve, reject) => {
+      const tx = db.transaction('files', mode);
+      const request = action(tx.objectStore('files'));
+      tx.oncomplete = () => resolve(request ? request.result : undefined);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    }));
+  }
+
+  const shotGet = key => shotStore('readonly', store => store.get(key));
+  const shotSet = (key, value) => shotStore('readwrite', store => store.put(value, key));
+  const shotDel = key => shotStore('readwrite', store => store.delete(key));
+
+  function loadShotAssets() {
+    if (shot.loaded) return;
+    shot.loaded = true;
+    shotGet('sound').then(record => {
+      const blob = record && record.blob;
+      if (blob instanceof Blob) {
+        shot.soundBlob = blob;
+        shot.soundName = String(record.name || '已选择的音效');
+      }
+      syncShotUi();
+    }).catch(() => {});
+    shotGet('dir').then(handle => {
+      if (handle && typeof handle.getFileHandle === 'function') {
+        shot.dirHandle = handle;
+        shot.dirName = String(handle.name || '');
+      }
+      syncShotUi();
+    }).catch(() => {});
+  }
+
+  function syncShotUi() {
+    loadShotAssets();
+    for (const button of document.querySelectorAll('[data-sgs-syn-shotkey]')) {
+      button.textContent = uiState.capturingShotKey ? '按下按键…' : (settings.shotKey || '未设置');
+      button.classList.toggle('is-capturing', uiState.capturingShotKey);
+    }
+    for (const el of document.querySelectorAll('[data-sgs-syn-shot-sound-name]')) {
+      el.innerHTML = shot.soundBlob
+        ? `音效：<b>${escapeHtml(shot.soundName || '已选择')}</b>`
+        : '默认：<b>内置音效 scr.mp3</b>';
+    }
+    for (const el of document.querySelectorAll('[data-sgs-syn-shot-dir-name]')) {
+      el.innerHTML = shot.dirName
+        ? `保存到：<b>${escapeHtml(shot.dirName)}</b>`
+        : '默认：电脑截图文件夹（首次截图选择一次「图片\\屏幕截图」，之后不再弹窗）';
+    }
+  }
+
+  function playShotSound() {
+    let url = typeof DEFAULT_SHOT_SOUND === 'string' ? DEFAULT_SHOT_SOUND : '';
+    if (shot.soundBlob) {
+      if (!shot.soundUrl) shot.soundUrl = URL.createObjectURL(shot.soundBlob);
+      url = shot.soundUrl;
+    }
+    if (!url) return;
+    try {
+      const audio = new Audio(url);
+      audio.volume = 0.9;
+      const played = audio.play();
+      if (played && typeof played.catch === 'function') played.catch(() => {});
+    } catch (_) {}
+  }
+
+  function applyShotSound(file) {
+    if (!file) return;
+    shot.soundBlob = file;
+    shot.soundName = file.name || '已选择的音效';
+    if (shot.soundUrl) URL.revokeObjectURL(shot.soundUrl);
+    shot.soundUrl = '';
+    shotSet('sound', { blob: file, name: shot.soundName }).catch(() => toast('音效保存失败，重启后可能需要重新选择'));
+    syncShotUi();
+    playShotSound();
+    toast(`截图音效已设置：${shot.soundName}`);
+  }
+
+  function pickShotSoundByInput() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*,.mp3,.wav,.ogg,.m4a';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      input.remove();
+      applyShotSound(file);
+    }, { once: true });
+    input.click();
+  }
+
+  function pickShotSound() {
+    if (typeof window.showOpenFilePicker !== 'function') {
+      pickShotSoundByInput();
+      return;
+    }
+    try {
+      window.showOpenFilePicker({
+        id: 'sgs-syn-shot-sound',
+        startIn: 'music',
+        multiple: false,
+        types: [{ description: '音频文件', accept: { 'audio/*': ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'] } }],
+      }).then(handles => handles[0].getFile()).then(applyShotSound).catch(error => {
+        if (error && error.name === 'AbortError') return;
+        pickShotSoundByInput();
+      });
+    } catch (_) {
+      pickShotSoundByInput();
+    }
+  }
+
+  function clearShotSound() {
+    shot.soundBlob = null;
+    shot.soundName = '';
+    if (shot.soundUrl) URL.revokeObjectURL(shot.soundUrl);
+    shot.soundUrl = '';
+    shotDel('sound').catch(() => {});
+    syncShotUi();
+    toast('已恢复内置截图音效');
+  }
+
+  function pickShotDir() {
+    if (typeof window.showDirectoryPicker !== 'function') {
+      toast('当前环境不支持固定保存目录，截图会保存到浏览器下载目录');
+      return;
+    }
+    try {
+      window.showDirectoryPicker({ id: 'sgs-syn-shots', mode: 'readwrite', startIn: 'pictures' }).then(handle => {
+        shot.dirHandle = handle;
+        shot.dirName = String(handle.name || '已选择文件夹');
+        shotSet('dir', handle).catch(() => toast('保存目录记忆失败，重启后可能需要重新选择'));
+        syncShotUi();
+        toast(`截图保存到：${shot.dirName}`);
+      }).catch(error => {
+        if (error && error.name === 'AbortError') return;
+        toast(`选择文件夹失败：${error && error.message || error}`);
+      });
+    } catch (error) {
+      toast(`当前环境不支持选择文件夹：${error && error.message || error}`);
+    }
+  }
+
+  function resetShotDir() {
+    shot.dirHandle = null;
+    shot.dirName = '';
+    shotDel('dir').catch(() => {});
+    syncShotUi();
+    toast('已恢复默认保存位置，下次截图会重新选择文件夹');
+  }
+
+  function shotFileName() {
+    const now = new Date();
+    const pad = value => String(value).padStart(2, '0');
+    return `sgs_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.png`;
+  }
+
+  function stageScreenshotBlob() {
+    const Laya = window.Laya;
+    const st = Laya && Laya.stage;
+    if (!st || typeof st.drawToCanvas !== 'function') return null;
+    const canvas = st.canvas || {};
+    const width = Math.round(Number(st.width) || Number(canvas.width) || 0);
+    const height = Math.round(Number(st.height) || Number(canvas.height) || 0);
+    if (width <= 0 || height <= 0) return null;
+    const texture = st.drawToCanvas(width, height, 0, 0);
+    if (!texture || typeof texture.toBase64 !== 'function') return null;
+    let data = String(texture.toBase64('image/png', 1) || '');
+    if (!data) return null;
+    if (data.indexOf('base64,') === -1) data = `data:image/png;base64,${data}`;
+    const comma = data.indexOf(',');
+    if (comma === -1) return null;
+    const binary = atob(data.slice(comma + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: 'image/png' });
+  }
+
+  function downloadShotBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  function dirWritable(handle) {
+    if (!handle || typeof handle.queryPermission !== 'function') return Promise.resolve(false);
+    return handle.queryPermission({ mode: 'readwrite' }).then(permission => {
+      if (permission === 'granted') return true;
+      if (typeof handle.requestPermission !== 'function') return false;
+      return handle.requestPermission({ mode: 'readwrite' }).then(next => next === 'granted').catch(() => false);
+    }).catch(() => false);
+  }
+
+  function saveShotBlob(blob, name) {
+    const handle = shot.dirHandle;
+    if (!handle) {
+      downloadShotBlob(blob, name);
+      toast(`截图已保存：${name}`);
+      return Promise.resolve();
+    }
+    return dirWritable(handle).then(ok => {
+      if (!ok) {
+        downloadShotBlob(blob, name);
+        toast('保存目录未授权，已改为下载，请在面板重新选择文件夹');
+        return;
+      }
+      return handle.getFileHandle(name, { create: true })
+        .then(fileHandle => fileHandle.createWritable())
+        .then(writable => writable.write(blob).then(() => writable.close()))
+        .then(() => toast(`截图已保存：${name}`))
+        .catch(error => {
+          downloadShotBlob(blob, name);
+          toast(`写入目录失败，已改为下载：${error && error.message || error}`);
+        });
+    });
+  }
+
+  function takeScreenshot() {
+    if (shot.busy) return;
+    const blob = safe(stageScreenshotBlob, null);
+    if (!blob) {
+      toast('截图失败：请先进入牌局');
+      return;
+    }
+    playShotSound();
+    shot.busy = true;
+    const name = shotFileName();
+    const finish = () => setTimeout(() => { shot.busy = false; }, 400);
+    if (shot.dirHandle || typeof window.showDirectoryPicker !== 'function') {
+      saveShotBlob(blob, name).catch(error => {
+        toast(`截图失败：${error && error.message || error}`);
+      }).then(finish);
+      return;
+    }
+    try {
+      window.showDirectoryPicker({ id: 'sgs-syn-shots', mode: 'readwrite', startIn: 'pictures' }).then(handle => {
+        shot.dirHandle = handle;
+        shot.dirName = String(handle.name || '已选择文件夹');
+        shotSet('dir', handle).catch(() => {});
+        syncShotUi();
+        return saveShotBlob(blob, name);
+      }).catch(error => {
+        if (error && error.name === 'AbortError') toast('截图已取消：未选择保存文件夹');
+        else toast(`保存截图失败：${error && error.message || error}`);
+      }).then(finish);
+    } catch (error) {
+      toast(`保存截图失败：${error && error.message || error}`);
+      finish();
+    }
+  }
+
+  function sendViaChatManager(row) {
+    const chatManager = findChatManager(true, true);
+    if (chatManager && typeof chatManager.SendSkinChatPhrase === 'function') {
+      try {
+        chatManager.SendSkinChatPhrase(row.key);
+        showSendSuccess(row);
+        return true;
+      } catch (error) {
+        runtime.chatManager = null;
+        toast(`发送失败：${error && error.message || error}`);
+        return false;
+      }
+    }
+    toast('当前没有可用的台词发送通道，大厅里点击可以试听。');
+    return false;
+  }
+
   function sendSoundRow(row, fromPanel) {
     if (!row) return;
     if (!inGame()) {
@@ -1859,34 +2196,20 @@
     if (J && jinnangSoundAvailable()) {
       try {
         const result = J.sendOfficialSkinPhrase(row.key);
-        const finish = res => {
-          if (res && res.ok) {
-            showSendSuccess(row);
-          } else {
-            const reason = res && (res.reason || res.message) || '未知原因';
-            toast(`发送失败：${reason}`);
-          }
-        };
         if (result && typeof result.then === 'function') {
-          result.then(finish).catch(error => toast(`发送失败：${error && error.message || error}`));
+          result.then(res => {
+            if (res && res.ok) showSendSuccess(row);
+            else sendViaChatManager(row);
+          }).catch(() => sendViaChatManager(row));
+        } else if (result && result.ok) {
+          showSendSuccess(row);
         } else {
-          finish(result);
+          sendViaChatManager(row);
         }
         return;
       } catch (_) {}
     }
-    const chatManager = findChatManager(true, true);
-    if (chatManager && typeof chatManager.SendSkinChatPhrase === 'function') {
-      try {
-        chatManager.SendSkinChatPhrase(row.key);
-        showSendSuccess(row);
-        return;
-      } catch (error) {
-        toast(`发送失败：${error && error.message || error}`);
-        return;
-      }
-    }
-    toast('当前没有可用的台词发送通道，大厅里点击可以试听。');
+    sendViaChatManager(row);
   }
 
   function ensureSoundModal() {
@@ -1912,7 +2235,7 @@
           ${limitRowHtml('modal')}
           <div class="sgs-syn-results sgs-syn-modal-results" id="sgs-syn-modal-results"></div>
         </div>
-        <div class="sgs-syn-modal-foot">数据来自锦囊袋皮肤台词目录 · 发送依赖「牌局台词发送」</div>
+        <div class="sgs-syn-modal-foot">数据来自锦囊袋皮肤台词目录 · 局内发送依赖锦囊袋牌局台词发送插件</div>
       </div>
     `;
     document.body.appendChild(modal);
@@ -1926,13 +2249,15 @@
     for (const type of ['keydown', 'keypress', 'keyup', 'mousedown', 'pointerdown', 'input', 'compositionstart', 'compositionend']) {
       input.addEventListener(type, stop);
     }
+    bindSoundSearchGuard(input, results, 'modal');
     input.addEventListener('input', () => {
       sound.query = input.value;
-      renderSoundResults(results, sound.query, getResultLimit('modal'));
+      scheduleSoundSearch(input, results, 'modal');
     });
     input.addEventListener('keydown', event => {
       if (event.key !== 'Enter') return;
       event.preventDefault();
+      if (results.__sgsSynQuery !== input.value) runSoundSearch(input, results, 'modal');
       const first = results.querySelector('.sgs-syn-phrase');
       if (first) first.click();
     });
@@ -2001,6 +2326,25 @@
       ${toggleHtml('blockOpponentChat', '屏蔽对手发言', '牌局中隐藏其他玩家发送的普通聊天、快捷短语与表情。', settings.blockOpponentChat)}
       ${toggleHtml('blockOtherSkinEffects', '屏蔽其他人皮肤特效', '其他座位触发皮肤技能特效时，本机不再播放。', settings.blockOtherSkinEffects)}
       ${toggleHtml('blockOtherVoice', '屏蔽其他人武将台词', '不再听到其他玩家的技能语音、死亡语音与武将台词快捷短语。', settings.blockOtherVoice)}
+      <div class="sgs-syn-sec"><span>快捷键截图</span></div>
+      <div class="sgs-syn-hotkey-row">
+        <span>截图快捷键</span>
+        <button type="button" class="sgs-syn-hotkey-btn" data-sgs-syn-shotkey="1">${escapeHtml(settings.shotKey || '未设置')}</button>
+        <button type="button" class="sgs-syn-hotkey-clear" data-sgs-syn-shotkey-clear="1">清除</button>
+      </div>
+      <div class="sgs-syn-hint">支持单个按键（如 F8、P），按下时拦截该键的其他操作；输入框内不受影响。</div>
+      <div class="sgs-syn-hotkey-row">
+        <span>截图音效</span>
+        <button type="button" class="sgs-syn-hotkey-btn" data-sgs-syn-shot-sound-pick="1">选择音效</button>
+        <button type="button" class="sgs-syn-hotkey-clear" data-sgs-syn-shot-sound-clear="1">清除</button>
+      </div>
+      <div class="sgs-syn-shot-info" data-sgs-syn-shot-sound-name></div>
+      <div class="sgs-syn-hotkey-row">
+        <span>保存位置</span>
+        <button type="button" class="sgs-syn-hotkey-btn" data-sgs-syn-shot-dir="1">选择文件夹</button>
+        <button type="button" class="sgs-syn-hotkey-clear" data-sgs-syn-shot-dir-reset="1">默认</button>
+      </div>
+      <div class="sgs-syn-shot-info" data-sgs-syn-shot-dir-name></div>
     `;
   }
 
@@ -2023,7 +2367,7 @@
         <input class="sgs-syn-input" id="sgs-syn-${prefix}-input" type="text" spellcheck="false" autocomplete="off" placeholder="搜索台词 / 武将名，例如：仁德 刘备">
         <button type="button" class="sgs-syn-btn" id="sgs-syn-${prefix}-open">打开</button>
       </div>
-      <div class="sgs-syn-hint">在牌局聊天框输入 <b>/sound</b> 也能随时呼出。选中台词后点一下即可发送。</div>
+      <div class="sgs-syn-hint">选中台词后点一下即可发送；在大厅里点击是试听。</div>
       ${limitRowHtml('panel')}
       <div class="sgs-syn-results" id="sgs-syn-${prefix}-results"></div>
     `;
@@ -2069,8 +2413,49 @@
         saveSettings();
         syncToggleUi();
         toast('面板快捷键已清除');
+        return;
+      }
+      const shotKeyButton = target.closest('[data-sgs-syn-shotkey]');
+      if (shotKeyButton) {
+        event.preventDefault();
+        startShotKeyCapture();
+        return;
+      }
+      const shotKeyClear = target.closest('[data-sgs-syn-shotkey-clear]');
+      if (shotKeyClear) {
+        event.preventDefault();
+        settings.shotKey = '';
+        saveSettings();
+        syncToggleUi();
+        toast('截图快捷键已清除');
+        return;
+      }
+      const shotSoundPick = target.closest('[data-sgs-syn-shot-sound-pick]');
+      if (shotSoundPick) {
+        event.preventDefault();
+        pickShotSound();
+        return;
+      }
+      const shotSoundClear = target.closest('[data-sgs-syn-shot-sound-clear]');
+      if (shotSoundClear) {
+        event.preventDefault();
+        clearShotSound();
+        return;
+      }
+      const shotDirPick = target.closest('[data-sgs-syn-shot-dir]');
+      if (shotDirPick) {
+        event.preventDefault();
+        pickShotDir();
+        return;
+      }
+      const shotDirReset = target.closest('[data-sgs-syn-shot-dir-reset]');
+      if (shotDirReset) {
+        event.preventDefault();
+        resetShotDir();
+        return;
       }
     });
+    syncShotUi();
   }
 
   function syncLimitInputs() {
@@ -2116,6 +2501,45 @@
     });
   }
 
+  const soundSearchJobs = new WeakMap();
+
+  function soundSearchState(input) {
+    let state = soundSearchJobs.get(input);
+    if (!state) {
+      state = { timer: 0, lastAt: 0, composing: false };
+      soundSearchJobs.set(input, state);
+    }
+    return state;
+  }
+
+  function runSoundSearch(input, results, kind) {
+    const state = soundSearchState(input);
+    state.lastAt = Date.now();
+    if (results.__sgsSynQuery === input.value) return;
+    if (!sound.loaded) ensureSoundIndex();
+    renderSoundResults(results, input.value, getResultLimit(kind));
+  }
+
+  function scheduleSoundSearch(input, results, kind, immediate) {
+    const state = soundSearchState(input);
+    if (state.composing) return;
+    clearTimeout(state.timer);
+    const wait = immediate ? 0 : Math.max(SEARCH_DEBOUNCE, state.lastAt + SEARCH_COOLDOWN - Date.now());
+    state.timer = setTimeout(() => runSoundSearch(input, results, kind), wait);
+  }
+
+  function bindSoundSearchGuard(input, results, kind) {
+    const state = soundSearchState(input);
+    input.addEventListener('compositionstart', () => {
+      state.composing = true;
+      clearTimeout(state.timer);
+    });
+    input.addEventListener('compositionend', () => {
+      state.composing = false;
+      scheduleSoundSearch(input, results, kind);
+    });
+  }
+
   function bindSoundScope(scope, prefix, isPanel) {
     const input = scope.querySelector(`#sgs-syn-${prefix}-input`);
     const results = scope.querySelector(`#sgs-syn-${prefix}-results`);
@@ -2129,17 +2553,12 @@
     for (const type of ['keydown', 'keypress', 'keyup', 'mousedown', 'pointerdown', 'input', 'compositionstart', 'compositionend']) {
       input.addEventListener(type, stop);
     }
-    let timer = 0;
-    input.addEventListener('input', () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (!sound.loaded) ensureSoundIndex();
-        renderSoundResults(results, input.value, getResultLimit('panel'));
-      }, 160);
-    });
+    bindSoundSearchGuard(input, results, 'panel');
+    input.addEventListener('input', () => scheduleSoundSearch(input, results, 'panel'));
     input.addEventListener('keydown', event => {
       if (event.key !== 'Enter') return;
       event.preventDefault();
+      if (results.__sgsSynQuery !== input.value) runSoundSearch(input, results, 'panel');
       const first = results.querySelector('.sgs-syn-phrase');
       if (first) first.click();
     });
@@ -2545,6 +2964,7 @@
       button.textContent = uiState.capturingHotkey ? '按下快捷键…' : (settings.hotkey || '未设置');
       button.classList.toggle('is-capturing', uiState.capturingHotkey);
     }
+    syncShotUi();
   }
 
   function isModifierKey(key) {
@@ -2572,22 +2992,69 @@
     return parts.concat([key]).join('+');
   }
 
-  function hotkeyMatchesEvent(event) {
-    if (!settings.hotkey) return false;
-    const parts = String(settings.hotkey).split('+');
+  function comboMatchesEvent(combo, event) {
+    if (!combo) return false;
+    const parts = String(combo).split('+');
     const key = parts[parts.length - 1];
-    const needCtrl = parts.includes('Ctrl');
-    const needAlt = parts.includes('Alt');
-    const needShift = parts.includes('Shift');
-    const needMeta = parts.includes('Meta');
-    return !!event.ctrlKey === needCtrl
-      && !!event.altKey === needAlt
-      && !!event.shiftKey === needShift
-      && !!event.metaKey === needMeta
+    return !!event.ctrlKey === parts.includes('Ctrl')
+      && !!event.altKey === parts.includes('Alt')
+      && !!event.shiftKey === parts.includes('Shift')
+      && !!event.metaKey === parts.includes('Meta')
       && normalizeHotkeyKey(event.key) === key;
   }
 
+  function hotkeyMatchesEvent(event) {
+    return comboMatchesEvent(settings.hotkey, event);
+  }
+
+  function isTypingTarget(target) {
+    if (!target || !target.closest) return false;
+    return !!target.closest('input, textarea, select, [contenteditable="true"], .sgs-syn-input, .sgs-syn-limit-input');
+  }
+
+  function startShotKeyCapture() {
+    uiState.captureKeys.clear();
+    uiState.capturingShotKey = true;
+    syncToggleUi();
+    toast('请按下一个按键（可单键），Esc 取消，Backspace 清除');
+  }
+
+  function shotKeyComboFromEvent(event) {
+    const parts = [];
+    if (event.ctrlKey) parts.push('Ctrl');
+    if (event.altKey) parts.push('Alt');
+    if (event.shiftKey) parts.push('Shift');
+    if (event.metaKey) parts.push('Meta');
+    const key = normalizeHotkeyKey(event.key);
+    if (!key || isModifierKey(key)) return '';
+    if (/^(Escape|Tab|Backspace|Delete|Dead|Unidentified|Process|CapsLock|NumLock|ScrollLock)$/.test(key)) return '';
+    return parts.concat([key]).join('+');
+  }
+
+  function blockKeyEvent(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+  }
+
+  function handleShotKeyup(event) {
+    const released = normalizeHotkeyKey(event.key);
+    if (uiState.captureKeys.has(released)) {
+      if (event.type === 'keyup') uiState.captureKeys.delete(released);
+      blockKeyEvent(event);
+      return;
+    }
+    if (uiState.capturingHotkey || uiState.capturingShotKey) {
+      blockKeyEvent(event);
+      return;
+    }
+    if (!settings.shotKey || isTypingTarget(event.target)) return;
+    if (!comboMatchesEvent(settings.shotKey, event)) return;
+    blockKeyEvent(event);
+  }
+
   function startHotkeyCapture() {
+    uiState.captureKeys.clear();
     uiState.capturingHotkey = true;
     syncToggleUi();
     toast('请按下快捷键组合，Esc 取消，Backspace 清除');
@@ -2617,10 +3084,11 @@
   }
 
   function handleHotkeyKeydown(event) {
+    if (uiState.capturingHotkey || uiState.capturingShotKey) {
+      uiState.captureKeys.add(normalizeHotkeyKey(event.key));
+    }
     if (uiState.capturingHotkey) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
+      blockKeyEvent(event);
       if (event.key === 'Escape') {
         uiState.capturingHotkey = false;
         syncToggleUi();
@@ -2648,12 +3116,44 @@
       toast(`面板快捷键已设为 ${combo}`);
       return;
     }
-    if (!settings.hotkey || event.repeat) return;
-    if (!hotkeyMatchesEvent(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
-    togglePanelByHotkey();
+    if (uiState.capturingShotKey) {
+      blockKeyEvent(event);
+      if (event.key === 'Escape') {
+        uiState.capturingShotKey = false;
+        syncToggleUi();
+        toast('已取消设置截图快捷键');
+        return;
+      }
+      if (event.key === 'Backspace' || event.key === 'Delete') {
+        settings.shotKey = '';
+        saveSettings();
+        uiState.capturingShotKey = false;
+        syncToggleUi();
+        toast('截图快捷键已清除');
+        return;
+      }
+      if (isModifierKey(event.key)) return;
+      const combo = shotKeyComboFromEvent(event);
+      if (!combo) {
+        toast('这个按键不能用作截图快捷键');
+        return;
+      }
+      settings.shotKey = combo;
+      saveSettings();
+      uiState.capturingShotKey = false;
+      syncToggleUi();
+      toast(`截图快捷键已设为 ${combo}`);
+      return;
+    }
+    if (settings.hotkey && !event.repeat && hotkeyMatchesEvent(event)) {
+      blockKeyEvent(event);
+      togglePanelByHotkey();
+      return;
+    }
+    if (!settings.shotKey || event.repeat || isTypingTarget(event.target)) return;
+    if (!comboMatchesEvent(settings.shotKey, event)) return;
+    blockKeyEvent(event);
+    takeScreenshot();
   }
 
   function applySetting(key) {
@@ -2668,27 +3168,6 @@
       applyVoicePolicy(true);
     }
   }
-  function hookChatInputs() {
-    const rootStage = stage();
-    if (!rootStage) return;
-    const inputs = [];
-    eachNode(rootStage, node => {
-      if (/SgsTextInput|TextInput/.test(classOf(node))) inputs.push(node);
-    });
-    for (const input of inputs) {
-      if (input.__sgsSynInputHooked) continue;
-      input.__sgsSynInputHooked = true;
-      const handler = () => {
-        const text = String(safe(() => input.text, '') || '');
-        if (!/^\/sound(?:\s|$)/i.test(text.trim())) return;
-        const query = text.trim().replace(/^\/sound\s*/i, '');
-        safe(() => { input.text = ''; });
-        setTimeout(() => openSoundModal(query), 0);
-      };
-      safe(() => input.on(window.Laya.Event.INPUT, null, handler));
-      safe(() => input.on(window.Laya.Event.FOCUS, null, handler));
-    }
-  }
   function boot() {
     installGlobalCss();
   }
@@ -2700,7 +3179,13 @@
   }
 
   installGlobalCss();
+  loadShotAssets();
+  window.addEventListener('keydown', handleHotkeyKeydown, true);
+  window.addEventListener('keyup', handleShotKeyup, true);
+  window.addEventListener('keypress', handleShotKeyup, true);
   document.addEventListener('keydown', handleHotkeyKeydown, true);
+  document.addEventListener('keyup', handleShotKeyup, true);
+  document.addEventListener('keypress', handleShotKeyup, true);
   setInterval(() => {
     installGlobalCss();
     if (!document.body) return;
@@ -2710,7 +3195,6 @@
   setInterval(dotTick, 300);
   setInterval(redDotTick, 400);
   setInterval(runtimeTick, 900);
-  setInterval(hookChatInputs, 1200);
   setInterval(() => {
     if (settings.blockOtherVoice && inGame()) applyVoicePolicy(false);
   }, 5000);

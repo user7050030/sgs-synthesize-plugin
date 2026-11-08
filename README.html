@@ -21,7 +21,6 @@
   }
 
   *{ box-sizing:border-box; }
-
   html{ scroll-behavior:smooth; }
 
   body{
@@ -65,9 +64,7 @@
     -webkit-background-clip:text; background-clip:text; color:transparent;
     white-space:nowrap;
   }
-  .toc{
-    margin-left:auto; display:flex; gap:2px; flex-wrap:wrap;
-  }
+  .toc{ margin-left:auto; display:flex; gap:2px; flex-wrap:wrap; }
   .toc a{
     font-size:13px; color:var(--muted); text-decoration:none;
     padding:6px 11px; border-radius:999px; transition:.18s;
@@ -77,10 +74,7 @@
   .toc a.active{ background:var(--accent-soft); color:var(--accent); font-weight:600; }
 
   /* ---------- 主体 ---------- */
-  main{
-    max-width:960px; margin:0 auto; padding:44px 20px 90px;
-  }
-
+  main{ max-width:960px; margin:0 auto; padding:44px 20px 90px; }
   section{ scroll-margin-top:84px; }
 
   h1{
@@ -122,14 +116,10 @@
   }
   .callout p{ margin:4px 0; }
   .callout.note{ border-left-color:var(--note); background:#eff6ff; }
-  .callout.note .tag{ color:var(--note); }
-
   .callout.warn{ border-left-color:var(--warn); background:#fffbeb; }
   .callout.warn .tag{ color:#b45309; }
-
   .callout.tip{ border-left-color:var(--ok); background:#f0fdf7; }
   .callout.tip .tag{ color:#047857; }
-
   .callout.danger{ border-left-color:var(--danger); background:#fff5f5; }
   .callout.danger .tag{ color:var(--danger); }
 
@@ -204,10 +194,7 @@
   }
   .steps b{ font-size:15.5px; }
 
-  .shots{
-    display:flex; flex-wrap:wrap; gap:12px;
-    margin:12px 0 6px;
-  }
+  .shots{ display:flex; flex-wrap:wrap; gap:12px; margin:12px 0 6px; }
   .shot{ margin:0; }
   .shot img{
     display:block;
@@ -309,7 +296,7 @@
 <main id="anchor_head">
 
   <h1>综合插件整合</h1>
-  <p class="lead">设置展示搜索 · 去红点 · 锦囊袋圆点 · 牌局屏蔽 · <code>/sound</code> 台词搜索，一个页签全搞定。</p>
+  <p class="lead">设置展示搜索 · 去红点 · 锦囊袋圆点 · 牌局屏蔽 · <code>/sound</code> 台词搜索 · 快捷键截图，一个页签全搞定。</p>
 
   <!-- NOTE -->
   <div class="callout note">
@@ -357,7 +344,11 @@
       </li>
       <li>
         <b><code>/sound</code> 台词搜索</b>
-        <span>按台词内容或武将名搜索，武将名匹配的结果排在最前；结果右侧带<strong>对应皮肤头像</strong>；显示条数可输入，外面面板默认 10 条、<code>/sound</code> 弹窗默认 50 条。大厅里点击 = 试听，牌局里点击 = 发送；牌局聊天框输入 <code>/sound</code> 也能呼出搜索窗。</span>
+        <span>按台词内容或武将名搜索，武将名匹配的结果排在最前；结果右侧带<strong>对应皮肤头像</strong>；显示条数可输入，外面面板默认 10 条、<code>/sound</code> 弹窗默认 50 条。大厅里点击 = 试听，牌局里点击 = 发送。</span>
+      </li>
+      <li>
+        <b>快捷键截图</b>
+        <span>面板最下面可以设一个<strong>单键</strong>快捷键（如 <code>F12</code>、<code>P</code>），按下时拦截该键的其他操作；截图保存为 <code>sgs_年月日_时分秒.png</code>。默认音效以 base64 形式内置在脚本里（<code>scr.mp3</code>），也可以自己选本地音频；保存位置默认是电脑截图文件夹——<strong>首次截图时选一次「图片\屏幕截图」授权</strong>。</span>
       </li>
     </ul>
   </section>
@@ -375,6 +366,7 @@
         <li><b>屏蔽皮肤特效：</b>游戏类原型是<strong>不可扩展对象</strong>，使用 <code>WeakMap</code> 存补丁状态；同时替换 <code>_events</code> 里已绑定的 <code>method</code>（单个对象或数组都处理），覆盖动态皮肤、技能皮肤、入场、登场、皮肤套装等入口。</li>
         <li><b>屏蔽台词：</b>直接拦 <code>PlayerSeat</code> 的技能语音、技能资源语音、死亡语音，再对入场 / 登场等 UI 方法做语音静音；锦囊袋自己的「听他人台词」也同步关闭。</li>
         <li><b><code>/sound</code>：</b>有锦囊袋目录时解压本地皮肤目录，建约 3 万条台词索引；没有目录时用游戏里当前武将的快捷台词。每条台词预先算好小写检索字段并缓存最近查询，搜索按「武将名 &gt; 皮肤 / 技能 &gt; 台词文本」加权排序；头像优先用台词所属皮肤资源，再回退到武将头像 / 默认皮肤；局内发送语音必要支持 <a href="https://github.com/Clarrycy/jinnangmiaoji" target="_blank" rel="noopener">锦囊妙计锦囊袋 | 语音发送插件</a>。ヽ(•̀ω•́ )ゝ</li>
+        <li><b>截图：</b>用 <code>Laya.stage.drawToCanvas(...).toBase64('image/png', 1)</code> 抓游戏画面；默认音效以 base64 直接内置在脚本里；保存目录用 File System Access API 的目录句柄，句柄和自定义音效都存在 IndexedDB（<code>sgs-synthesize-media</code>）里，重启后仍在。未选目录时首次截图会打开一次文件夹选择（默认定位到「图片」），授权后所有截图静默写入，不再弹「另存为」；环境不支持时退回浏览器下载。截图快捷键在 <code>keydown/keyup/keypress</code> 捕获阶段拦截，命中后阻止该键继续传给游戏。</li>
       </ul>
     </div>
   </section>
@@ -559,12 +551,11 @@
     onScroll();
   })();
 
-  /* 图片加载失败时保留占位块，避免布局塌陷 */
+  /* 图片加载失败时隐藏，避免出现破图 */
   (function () {
     document.querySelectorAll('.shot img').forEach(function (img) {
       img.addEventListener('error', function () {
         img.style.visibility = 'hidden';
-        img.parentElement.classList.add('img-missing');
       });
     });
   })();
